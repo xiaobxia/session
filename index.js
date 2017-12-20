@@ -20,31 +20,36 @@ const _CONTEXT_SESSION = Symbol('context#_contextSession');
  * @param {Application} app, koa application instance
  * @api public
  */
-
-module.exports = function(opts, app) {
-  // session(app[, opts])
-  if (opts && typeof opts.use === 'function') {
-    [ app, opts ] = [ opts, app ];
-  }
-  // app required
-  if (!app || typeof app.use !== 'function') {
-    throw new TypeError('app instance required: `session(opts, app)`');
-  }
-
-  opts = formatOpts(opts);
-  extendContext(app.context, opts);
-
-  return async function session(ctx, next) {
-    const sess = ctx[CONTEXT_SESSION];
-    if (sess.store) await sess.initFromExternal();
-    try {
-      await next();
-    } catch (err) {
-      throw err;
-    } finally {
-      await sess.commit();
+//TODO opts是中间件的config，app是服务器
+module.exports = function (opts, app) {
+    // session(app[, opts])
+    //TODO hook，防止用户参数写反了
+    if (opts && typeof opts.use === 'function') {
+        [app, opts] = [opts, app];
     }
-  };
+    // app required
+    //TODO 报错
+    if (!app || typeof app.use !== 'function') {
+        throw new TypeError('app instance required: `session(opts, app)`');
+    }
+    //TODO 把设置格式化
+    opts = formatOpts(opts);
+    //TODO 获取接口
+    extendContext(app.context, opts);
+    //TODO 返回中间件
+    return async function session(ctx, next) {
+        const sess = ctx[CONTEXT_SESSION];
+        //TODO 如果是缓存层的
+        if (sess.store) await sess.initFromExternal();
+        try {
+            await next();
+        } catch (err) {
+            throw err;
+            //TODO 无论什么结果都会执行
+        } finally {
+            await sess.commit();
+        }
+    };
 };
 
 /**
@@ -56,49 +61,50 @@ module.exports = function(opts, app) {
  */
 
 function formatOpts(opts) {
-  opts = opts || {};
-  // key
-  opts.key = opts.key || 'koa:sess';
+    opts = opts || {};
+    // key
+    opts.key = opts.key || 'koa:sess';
 
-  // back-compat maxage
-  if (!('maxAge' in opts)) opts.maxAge = opts.maxage;
+    // back-compat maxage
+    if (!('maxAge' in opts)) opts.maxAge = opts.maxage;
 
-  // defaults
-  if (opts.overwrite == null) opts.overwrite = true;
-  if (opts.httpOnly == null) opts.httpOnly = true;
-  if (opts.signed == null) opts.signed = true;
+    // defaults
+    if (opts.overwrite == null) opts.overwrite = true;
+    if (opts.httpOnly == null) opts.httpOnly = true;
+    if (opts.signed == null) opts.signed = true;
 
-  debug('session options %j', opts);
+    debug('session options %j', opts);
 
-  // setup encoding/decoding
-  if (typeof opts.encode !== 'function') {
-    opts.encode = util.encode;
-  }
-  if (typeof opts.decode !== 'function') {
-    opts.decode = util.decode;
-  }
+    // setup encoding/decoding
+    //TODO encode和decode的函数
+    if (typeof opts.encode !== 'function') {
+        opts.encode = util.encode;
+    }
+    if (typeof opts.decode !== 'function') {
+        opts.decode = util.decode;
+    }
 
-  const store = opts.store;
-  if (store) {
-    assert(is.function(store.get), 'store.get must be function');
-    assert(is.function(store.set), 'store.set must be function');
-    assert(is.function(store.destroy), 'store.destroy must be function');
-  }
+    const store = opts.store;
+    if (store) {
+        assert(is.function(store.get), 'store.get must be function');
+        assert(is.function(store.set), 'store.set must be function');
+        assert(is.function(store.destroy), 'store.destroy must be function');
+    }
 
-  const ContextStore = opts.ContextStore;
-  if (ContextStore) {
-    assert(is.class(ContextStore), 'ContextStore must be a class');
-    assert(is.function(ContextStore.prototype.get), 'ContextStore.prototype.get must be function');
-    assert(is.function(ContextStore.prototype.set), 'ContextStore.prototype.set must be function');
-    assert(is.function(ContextStore.prototype.destroy), 'ContextStore.prototype.destroy must be function');
-  }
+    const ContextStore = opts.ContextStore;
+    if (ContextStore) {
+        assert(is.class(ContextStore), 'ContextStore must be a class');
+        assert(is.function(ContextStore.prototype.get), 'ContextStore.prototype.get must be function');
+        assert(is.function(ContextStore.prototype.set), 'ContextStore.prototype.set must be function');
+        assert(is.function(ContextStore.prototype.destroy), 'ContextStore.prototype.destroy must be function');
+    }
+    //TODO 生成genid的函数
+    if (!opts.genid) {
+        if (opts.prefix) opts.genid = () => opts.prefix + uid.sync(24);
+        else opts.genid = () => uid.sync(24);
+    }
 
-  if (!opts.genid) {
-    if (opts.prefix) opts.genid = () => opts.prefix + uid.sync(24);
-    else opts.genid = () => uid.sync(24);
-  }
-
-  return opts;
+    return opts;
 }
 
 /**
@@ -111,27 +117,27 @@ function formatOpts(opts) {
  */
 
 function extendContext(context, opts) {
-  Object.defineProperties(context, {
-    [CONTEXT_SESSION]: {
-      get() {
-        if (this[_CONTEXT_SESSION]) return this[_CONTEXT_SESSION];
-        this[_CONTEXT_SESSION] = new ContextSession(this, opts);
-        return this[_CONTEXT_SESSION];
-      },
-    },
-    session: {
-      get() {
-        return this[CONTEXT_SESSION].get();
-      },
-      set(val) {
-        this[CONTEXT_SESSION].set(val);
-      },
-      configurable: true,
-    },
-    sessionOptions: {
-      get() {
-        return this[CONTEXT_SESSION].opts;
-      },
-    },
-  });
+    Object.defineProperties(context, {
+        [CONTEXT_SESSION]: {
+            get() {
+                if (this[_CONTEXT_SESSION]) return this[_CONTEXT_SESSION];
+                this[_CONTEXT_SESSION] = new ContextSession(this, opts);
+                return this[_CONTEXT_SESSION];
+            },
+        },
+        session: {
+            get() {
+                return this[CONTEXT_SESSION].get();
+            },
+            set(val) {
+                this[CONTEXT_SESSION].set(val);
+            },
+            configurable: true,
+        },
+        sessionOptions: {
+            get() {
+                return this[CONTEXT_SESSION].opts;
+            },
+        },
+    });
 }
